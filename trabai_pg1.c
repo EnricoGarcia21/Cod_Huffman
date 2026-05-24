@@ -1,30 +1,54 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct dados {
+// ============================================================
+// STRUCTS
+// ============================================================
+
+struct dados {
     int simbolo;
     char palavra[30];
-    char cod_huff[30];
-} Dados;
+    char cod_huff[100];
+};
+typedef struct dados Dados;
 
-typedef struct Tabela {
+struct Tabela {
     Dados reg_dados;
     int cont_freq;
     struct Tabela *prox;
-} Tabela;
+};
+typedef struct Tabela Tabela;
 
-typedef struct NoArvore {
+struct NoArvore {
     int simbolo;
     int cont_freq;
     struct NoArvore *esq, *dir;
-} NoArvore;
+};
+typedef struct NoArvore NoArvore;
 
-typedef struct Floresta {
+struct Floresta {
     NoArvore *raiz;
-    Tabela *prox;
-} Floresta;
+    struct Floresta *prox;
+};
+typedef struct Floresta Floresta;
 
-// prot√≥tipos
+struct bits {
+    unsigned char b7:1;
+    unsigned char b6:1;
+    unsigned char b5:1;
+    unsigned char b4:1;
+    unsigned char b3:1;
+    unsigned char b2:1;
+    unsigned char b1:1;
+    unsigned char b0:1;
+};
+
+union byte {
+    struct bits bi;
+    unsigned char num;
+};
+
+int contadorSimbolo = 0;
 void toLower(char frase[]);
 void RemovePontuacao(char frase[]);
 void extraiPalavra(char frase[], int inicio, int fim, char palavra[]);
@@ -32,7 +56,13 @@ int comparaPalavra(char a[], char b[]);
 Tabela *inserePalavra(Tabela *lista, char palavra[]);
 Tabela *contaFrequencia(char frase[], Tabela *lista);
 void imprimeFrequencia(Tabela *lista);
-void le_arq();
+NoArvore *criaNO(int simbolo, int freq);
+Floresta *insereListaNo(Floresta *lista, NoArvore *no);
+Floresta *criaFloresta(Tabela *lista);
+NoArvore *constroiHuffman(Floresta *floresta);
+Tabela *buscaSimbolo(Tabela *lista, int simbolo);
+void geraCodigosHuffman(NoArvore *raiz, Tabela *lista, char codigo[], int nivel);
+Tabela *le_arq(NoArvore **raiz);
 
 void toLower(char frase[]) {
     int i = 0;
@@ -57,7 +87,6 @@ void RemovePontuacao(char frase[]) {
     }
 }
 
-//strtok
 void extraiPalavra(char frase[], int inicio, int fim, char palavra[]) {
     int i, j = 0;
     for (i = inicio; i < fim; i++)
@@ -65,8 +94,6 @@ void extraiPalavra(char frase[], int inicio, int fim, char palavra[]) {
     palavra[j] = '\0';
 }
 
-
-// -> verifica se a palavra √© igual se for ela conta
 int comparaPalavra(char a[], char b[]) {
     int i = 0;
     while (a[i] != '\0' && b[i] != '\0') {
@@ -76,8 +103,12 @@ int comparaPalavra(char a[], char b[]) {
     return a[i] == '\0' && b[i] == '\0';
 }
 
+// ============================================================
+// LISTA DE PALAVRAS (TABELA)
+// ============================================================
+
 Tabela *inserePalavra(Tabela *lista, char palavra[]) {
-    // procura se j√° existe
+    // procura se j· existe ó sÛ incrementa frequÍncia
     Tabela *aux = lista;
     while (aux != NULL) {
         if (comparaPalavra(aux->reg_dados.palavra, palavra)) {
@@ -87,24 +118,26 @@ Tabela *inserePalavra(Tabela *lista, char palavra[]) {
         aux = aux->prox;
     }
 
-    // cria novo n√≥predicativos
+    // palavra nova: cria nÛ
     Tabela *novo = (Tabela *)malloc(sizeof(Tabela));
+    novo->reg_dados.simbolo = contadorSimbolo++; // sÌmbolo ˙nico global
+    novo->cont_freq = 1;
+    novo->prox = NULL;
+    novo->reg_dados.cod_huff[0] = '\0';
+
     int i = 0;
     while (palavra[i] != '\0') {
         novo->reg_dados.palavra[i] = palavra[i];
         i++;
     }
     novo->reg_dados.palavra[i] = '\0';
-    novo->cont_freq = 1;
-    novo->prox = NULL;
 
-    // lista vazia ou novo √© menor que o primeiro
+    // insere mantendo ordem crescente de frequÍncia
     if (lista == NULL || novo->cont_freq < lista->cont_freq) {
         novo->prox = lista;
         return novo;
     }
 
-    // acha a posi√ß√£o certa
     Tabela *ant = lista;
     while (ant->prox != NULL && ant->prox->cont_freq <= novo->cont_freq) {
         ant = ant->prox;
@@ -114,6 +147,7 @@ Tabela *inserePalavra(Tabela *lista, char palavra[]) {
 
     return lista;
 }
+
 Tabela *contaFrequencia(char frase[], Tabela *lista) {
     int i = 0, inicio = 0;
     char palavra[30];
@@ -124,11 +158,12 @@ Tabela *contaFrequencia(char frase[], Tabela *lista) {
                 extraiPalavra(frase, inicio, i, palavra);
                 lista = inserePalavra(lista, palavra);
             }
+            lista = inserePalavra(lista, "[ESP]"); // conta o espaÁo
             inicio = i + 1;
         }
         i++;
     }
-    // √∫ltima palavra da linha
+ 
     if (i > inicio) {
         extraiPalavra(frase, inicio, i, palavra);
         lista = inserePalavra(lista, palavra);
@@ -138,38 +173,243 @@ Tabela *contaFrequencia(char frase[], Tabela *lista) {
 }
 
 void imprimeFrequencia(Tabela *lista) {
+    printf("\n%-5s %-15s %s\n", "Simb", "Palavra", "Freq");
+    printf("-------------------------------\n");
     while (lista != NULL) {
-        printf("%-15s -> %d\n", lista->reg_dados.palavra, lista->cont_freq);
+        printf("%-5d %-15s %d\n",
+               lista->reg_dados.simbolo,
+               lista->reg_dados.palavra,
+               lista->cont_freq);
         lista = lista->prox;
     }
 }
 
-void le_arq() {
+// ============================================================
+// ¡RVORE DE HUFFMAN
+// ============================================================
+
+NoArvore *criaNO(int simbolo, int freq) {
+    NoArvore *no = (NoArvore *)malloc(sizeof(NoArvore));
+    no->simbolo = simbolo;
+    no->cont_freq = freq;
+    no->esq = NULL;
+    no->dir = NULL;
+    return no;
+}
+
+// Insere nÛ na floresta mantendo ordem crescente de frequÍncia
+Floresta *insereListaNo(Floresta *lista, NoArvore *no) {
+    Floresta *novo = (Floresta *)malloc(sizeof(Floresta));
+    novo->raiz = no;
+    novo->prox = NULL;
+
+    if (lista == NULL || no->cont_freq < lista->raiz->cont_freq) {
+        novo->prox = lista;
+        return novo;
+    }
+
+    Floresta *ant = lista;
+    while (ant->prox != NULL && ant->prox->raiz->cont_freq <= no->cont_freq) {
+        ant = ant->prox;
+    }
+    novo->prox = ant->prox;
+    ant->prox = novo;
+
+    return lista;
+}
+
+// Converte a Tabela em floresta de folhas
+Floresta *criaFloresta(Tabela *lista) {
+    Floresta *floresta = NULL;
+    Tabela *aux = lista;
+    while (aux != NULL) {
+        NoArvore *folha = criaNO(aux->reg_dados.simbolo, aux->cont_freq);
+        floresta = insereListaNo(floresta, folha);
+        aux = aux->prox;
+    }
+    return floresta;
+}
+
+// Algoritmo principal de Huffman
+NoArvore *constroiHuffman(Floresta *floresta) {
+    while (floresta != NULL && floresta->prox != NULL) {
+        // retira os dois de menor frequÍncia
+        NoArvore *esq = floresta->raiz;
+        floresta = floresta->prox;
+
+        NoArvore *dir = floresta->raiz;
+        floresta = floresta->prox;
+
+        // nÛ pai: sÌmbolo -1 = nÛ interno (n„o È palavra)
+        NoArvore *pai = criaNO(-1, esq->cont_freq + dir->cont_freq);
+        pai->esq = esq;
+        pai->dir = dir;
+
+        // reinsere o pai na floresta ordenada
+        floresta = insereListaNo(floresta, pai);
+    }
+
+    return floresta->raiz; // ˙nica raiz restante
+}
+
+// ============================================================
+// GERA«√O DOS C”DIGOS DE HUFFMAN
+// ============================================================
+
+// Busca na tabela pelo sÌmbolo para preencher cod_huff
+Tabela *buscaSimbolo(Tabela *lista, int simbolo) {
+    while (lista != NULL) {
+        if (lista->reg_dados.simbolo == simbolo)
+            return lista;
+        lista = lista->prox;
+    }
+    return NULL;
+}
+
+void geraCodigosHuffman(NoArvore *raiz, Tabela *lista, char codigo[], int nivel) {
+    if (raiz != NULL) {
+        if (raiz->esq == NULL && raiz->dir == NULL) {
+            // folha: grava o cÛdigo na tabela
+            codigo[nivel] = '\0';
+            Tabela *entrada = buscaSimbolo(lista, raiz->simbolo);
+            if (entrada != NULL) {
+                int i = 0;
+                while (codigo[i] != '\0') {
+                    entrada->reg_dados.cod_huff[i] = codigo[i];
+                    i++;
+                }
+                entrada->reg_dados.cod_huff[i] = '\0';
+            }
+        } else {
+            // nÛ interno: desce esquerda com "0" e direita com "1"
+            codigo[nivel] = '0';
+            geraCodigosHuffman(raiz->esq, lista, codigo, nivel + 1);
+
+            codigo[nivel] = '1';
+            geraCodigosHuffman(raiz->dir, lista, codigo, nivel + 1);
+        }
+    }
+}
+// ============================================================
+// EXIBI«√O DA ¡RVORE (horizontal, rotacionada 90∞)
+// ============================================================
+void imprimeArvore(NoArvore *raiz, int espaco) {
+    if (raiz != NULL) {
+        espaco += 8;
+
+        imprimeArvore(raiz->dir, espaco);
+
+        printf("\n");
+        int i;
+        for (i = 8; i < espaco; i++) printf(" ");
+
+        if (raiz->simbolo == -1)
+            printf("[%d]\n", raiz->cont_freq);      // nÛ interno: sÛ frequÍncia
+        else
+            printf("(%d|freq:%d)\n", raiz->simbolo, raiz->cont_freq); // folha: sÌmbolo + frequÍncia
+
+        imprimeArvore(raiz->esq, espaco);
+    }
+}
+// ============================================================
+// IMPRESS√O DA TABELA COM C”DIGOS
+// ============================================================
+
+void imprimeTabelaCodigos(Tabela *lista) {
+    printf("\n%-5s %-15s %-6s %s\n", "Simb", "Palavra", "Freq", "Cod.Huffman");
+    printf("------------------------------------------\n");
+    while (lista != NULL) {
+        printf("%-5d %-15s %-6d %s\n",
+               lista->reg_dados.simbolo,
+               lista->reg_dados.palavra,
+               lista->cont_freq,
+               lista->reg_dados.cod_huff);
+        lista = lista->prox;
+    }
+}
+
+// ============================================================
+// LEITURA DO ARQUIVO
+// ============================================================
+
+// Retorna a lista e preenche *raiz com a raiz da ·rvore
+Tabela *le_arq(NoArvore **raiz) {
     FILE *arq = fopen("frases.txt", "r");
     if (arq == NULL) {
         printf("Erro ao abrir o arquivo\n");
+       
     }else{
-        Tabela *lista = NULL;
-        char frase[100];
+    	
+    	Tabela *lista = NULL;
+    	char frase[200];
 
-        fgets(frase, 100, arq);
-        while (!feof(arq)) {
-            toLower(frase);
-            RemovePontuacao(frase);
-            lista = contaFrequencia(frase, lista);
-            fgets(frase, 100, arq);
-        }
+	    fgets(frase, 200, arq);
+	    while (!feof(arq)) {
+	        toLower(frase);
+	        RemovePontuacao(frase);
+	        lista = contaFrequencia(frase, lista);
+	        fgets(frase, 200, arq);
+	    }
+	    fclose(arq);
+	
+	    // monta a ·rvore de huffman
+	    Floresta *floresta = criaFloresta(lista);
+	    *raiz = constroiHuffman(floresta);
+	
+	    // gera os cÛdigos e preenche a tabela
+	    char codigo[100];
+	    geraCodigosHuffman(*raiz, lista, codigo, 0);
+	    
+	    return lista;
 
-        fclose(arq);
-
-        printf("=== Frequencia das palavras ===\n");
-        imprimeFrequencia(lista);
     }
 
-  
+    
 }
 
+//void gravaArquivoBinario(Tabela *lista) {
+//    FILE *arq = fopen("tabela_huffman.bin", "wb");
+//    if (arq == NULL) {
+//        printf("Erro ao criar arquivo binario\n");
+//    } else {
+//        Tabela *aux = lista;
+//        while (aux != NULL) {
+//            fwrite(&aux->reg_dados, sizeof(Dados), 1, arq);
+//            aux = aux->prox;
+//        }
+//        fclose(arq);
+//        printf("Arquivo binario gravado com sucesso!\n");
+//    }
+//}
+//void leArquivoBinario() {
+//    FILE *arq = fopen("tabela_huffman.bin", "rb");
+//    if (arq == NULL) {
+//        printf("Erro ao abrir arquivo binario\n");
+//    } else {
+//        Dados reg;
+//        printf("\n=== Leitura do arquivo binario ===\n");
+//        while (fread(&reg, sizeof(Dados), 1, arq) == 1) {
+//            printf("Simb: %-5d Palavra: %-15s Cod: %s\n",
+//                   reg.simbolo, reg.palavra, reg.cod_huff);
+//        }
+//        fclose(arq);
+//    }
+//}
+
 int main() {
-    le_arq();
+    NoArvore *raiz = NULL;
+    Tabela *lista = le_arq(&raiz);
+
+    printf("=== Frequencia das palavras ===\n");
+    imprimeFrequencia(lista);
+
+    printf("\n=== Arvore de Huffman ===\n");
+    imprimeArvore(raiz,1);
+
+    printf("\n=== Tabela com codigos de Huffman ===\n");
+    imprimeTabelaCodigos(lista);
+
+    //gravaArquivoBinario(lista);
+    
     return 0;
 }

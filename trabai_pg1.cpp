@@ -377,7 +377,7 @@ int main() {
         "para entender levaremos um tempo para envelhecer levaremos um tempo para morrer "
         "viver e amar viver e crescer crescer e aprender cada escolha um tempo";
 
-    char fraseParaCodificar[20000] = "Cada um tera um tempo para sonhar e viver";
+    char fraseParaCodificar[20000] = "fara fara tera fara tempo para sonhar e viver";
 
     toLower(textoBase);
     RemovePontuacao(textoBase);

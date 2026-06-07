@@ -139,7 +139,7 @@ int main() {
             }
         }
     }
-    printf("\"\n\nDecodificacao binaria concluida com sucesso!\n");
+    printf("\"\n\nDecodificacao binaria concluida\n");
     fclose(arqCod);
 
     return 0;

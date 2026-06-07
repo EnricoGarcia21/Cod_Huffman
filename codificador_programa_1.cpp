@@ -248,7 +248,7 @@ void geraCodigosHuffman(NoArvore *raiz, Tabela *lista, char codigo[], int nivel)
         }
     }
 }
-//Exibição Horizontal
+
 void imprimeArvore(NoArvore *raiz, int espaco) {
     if (raiz != NULL) {
         espaco += 8;
@@ -298,7 +298,19 @@ void concatenaCodigo(Tabela *lista, char palavra[], char bitString[]) {
     Tabela *aux = lista;
     while (aux != NULL) {
         if (comparaPalavra(aux->reg_dados.palavra, palavra)) {
-            strcat(bitString, aux->reg_dados.cod_huff);
+            int fimString = 0;
+            while (bitString[fimString] != '\0') {
+                fimString++;
+            }
+            
+            int j = 0;
+            while (aux->reg_dados.cod_huff[j] != '\0') {
+                bitString[fimString] = aux->reg_dados.cod_huff[j];
+                fimString++;
+                j++;
+            }
+            bitString[fimString] = '\0';
+            
             return;
         }
         aux = aux->prox;
@@ -341,7 +353,12 @@ void codificarEGravarFrase(char frase[], Tabela *lista) {
     int bitCount = 0;
 
     for (i = 0; i < totalBits; i++) {
-        int bitVal = (bitString[i] == '1') ? 1 : 0;
+        int bitVal;
+        if (bitString[i] == '1') {
+            bitVal = 1;
+        } else {
+            bitVal = 0;
+        }
 
         if (bitCount == 0) b.bi.b0 = bitVal;
         else if (bitCount == 1) b.bi.b1 = bitVal;
@@ -377,7 +394,7 @@ int main() {
         "para entender levaremos um tempo para envelhecer levaremos um tempo para morrer "
         "viver e amar viver e crescer crescer e aprender cada escolha um tempo";
 
-    char fraseParaCodificar[20000] = "fara fara tera fara tempo para sonhar e viver";
+    char fraseParaCodificar[20000] = "levaremos um cada tera fara tempo para sonhar e viver";
 
     toLower(textoBase);
     RemovePontuacao(textoBase);
